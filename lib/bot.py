@@ -7,6 +7,10 @@ from telegram.ext import Updater         # пакет называется pytho
 from telegram.ext import Filters         # пакет называется python-telegram-bot, но Python-
 from telegram.ext import CommandHandler  # модуль почему-то просто telegram ¯\_(ツ)_/¯
 from telegram.ext import MessageHandler  # модуль почему-то просто telegram ¯\_(ツ)_/¯
+import telegram
+import requests
+import json
+import re
 
 from lib.user import User
 from lib.dbconn import *
@@ -15,10 +19,19 @@ from lib.dbconn import *
 class Bot:
 
     def __init__(self, token):
+        self.need_update = False
         self.updater = Updater(token=token)
         self.addHandlers()
         self.updater.start_polling(clean=True)
         self.updater.idle()
+
+    def build_menu(self, buttons, n_cols, header_buttons=None, footer_buttons=None):
+        menu = [buttons[i:i + n_cols] for i in range(0, len(buttons), n_cols)]
+        if header_buttons:
+            menu.insert(0, header_buttons)
+        if footer_buttons:
+            menu.append(footer_buttons)
+        return menu
 
     def addHandlers(self):
         start_handler = CommandHandler('start', self.start)
@@ -36,19 +49,35 @@ class Bot:
         text_handler = MessageHandler(Filters.text, self.message)
         self.updater.dispatcher.add_handler(text_handler)
 
+        loc_handler = MessageHandler(Filters.location, self.location)
+        self.updater.dispatcher.add_handler(loc_handler)
+
     def start(self, bot, update):
-        self.debprint(str(update.message.chat_id), 'start');
+        self.debprint(str(update.message.chat_id), 'start')
         bot.sendMessage(chat_id=update.message.chat_id, text="Привет! Чем могу быть полезен?")
 
     def message(self, bot, update):
         mestext = update.message.text
-        self.debprint(mestext, 'mess');
-        try:
+        command = mestext.lower()
+        if command == 'reload':
+            self.need_update = True
+            return
+        elif re.sub(r'[^\w\s]', '', command) == 'где я':
+            try:
+                kbutts = [
+                    telegram.KeyboardButton('Узнать адрес', request_location=True)
+                ]
+                reply_markup = telegram.ReplyKeyboardMarkup(self.build_menu(kbutts, n_cols=1), resize_keyboard=True,
+                                                            one_time_keyboard=True)
+                bot.send_message(update.message.chat_id, "Нажмите кнопку", reply_markup=reply_markup)
+            except Exception as e:
+                self.debprint(e, 'mess_geo')
+                bot.sendMessage(chat_id=update.message.chat_id, text='Ошибка!')
+            return
+        else:
             text = 'Текст вашего сообщения - ' + mestext
             bot.sendMessage(chat_id=update.message.chat_id, text=text)
-        except Exception as e:
-            print(e)
-            bot.sendMessage(chat_id=update.message.chat_id, text='Ошибка!')
+
 
     def help(self, bot, update):
         text = '''
@@ -60,7 +89,31 @@ class Bot:
         bot.sendMessage(chat_id=update.message.chat_id, text=text)
 
     def geo(self, bot, update):
-        bot.sendMessage(chat_id=update.message.chat_id, text='TODO')
+        # TODO - переделать по обычную клавиатуру
+        # TODO №2 - вынести генерацию кнопок в класс butt_generator, а действие в функцию request_geopoint
+        try:
+            kbutts = [
+                telegram.KeyboardButton('Где я?', request_location=True)
+            ]
+            reply_markup = telegram.ReplyKeyboardMarkup(self.build_menu(kbutts, n_cols=1), resize_keyboard=True, one_time_keyboard=True)
+            bot.send_message(update.message.chat_id, "Выберите действие", reply_markup=reply_markup)
+        except Exception as e:
+            print(e)
+            bot.sendMessage(chat_id=update.message.chat_id, text='Ошибка!')
+
+    def location(self, bot, update):
+        loc = update.message.location
+        yandex_url = 'https://geocode-maps.yandex.ru/1.x/?format=json&geocode=' + str(loc.longitude) + ', ' + str(loc.latitude)
+        resp = requests.get(yandex_url)
+        txt = resp.text
+        jsn = json.loads(txt)
+        try:
+            addr = jsn['response']['GeoObjectCollection']['featureMember'][0]['GeoObject']['metaDataProperty']['GeocoderMetaData']['text']
+        except Exception as e:
+            addr = 'Не удалось установить адрес! Попробуйте еще раз'
+
+        bot.sendMessage(chat_id=update.message.chat_id, text=addr)
+
 
     def reg(self, bot, update):
         text = 'Что-то пошло не так...'
