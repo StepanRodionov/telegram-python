@@ -51,9 +51,10 @@ class Bot:
 
         loc_handler = MessageHandler(Filters.location, self.location)
         self.updater.dispatcher.add_handler(loc_handler)
+        
+        # todo - добавить полезных команд
 
     def start(self, bot, update):
-        self.debprint(str(update.message.chat_id), 'start')
         bot.sendMessage(chat_id=update.message.chat_id, text="Привет! Чем могу быть полезен?")
 
     def message(self, bot, update):
@@ -91,6 +92,7 @@ class Bot:
     def geo(self, bot, update):
         # TODO - переделать по обычную клавиатуру
         # TODO №2 - вынести генерацию кнопок в класс butt_generator, а действие в функцию request_geopoint
+        # TODO №3 - добавить кнопку на прогноз погоды в текущем месте (собрать несколько источников и выдать красивую сводку)
         try:
             kbutts = [
                 telegram.KeyboardButton('Где я?', request_location=True)
