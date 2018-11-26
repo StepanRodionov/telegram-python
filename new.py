@@ -25,7 +25,7 @@ def reloader(bot):
     if bot.need_update:
         importlib.reload(lib.bot)
 
+if __name__ == '__main__':
+    bot = lib.bot.Bot(token=settings.token())
 
-bot = lib.bot.Bot(token=settings.token())
-
-# set_interval(reloader, 5, bot)                TODO - автоперезагрузка!
+# автоперезагрузку убрал - ею будет заниматься teamcity или деплой скрипт
